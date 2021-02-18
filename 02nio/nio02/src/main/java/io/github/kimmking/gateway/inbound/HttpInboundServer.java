@@ -10,20 +10,22 @@ import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.logging.LogLevel;
 import io.netty.handler.logging.LoggingHandler;
+import lombok.Data;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.List;
 
+@Data
 public class HttpInboundServer {
-    private static Logger logger = LoggerFactory.getLogger(HttpInboundServer.class);
 
     private int port;
     
-    private String proxyServer;
+    private List<String> proxyServers;
 
-    public HttpInboundServer(int port, String proxyServer) {
+    public HttpInboundServer(int port, List<String> proxyServers) {
         this.port=port;
-        this.proxyServer = proxyServer;
+        this.proxyServers = proxyServers;
     }
 
     public void run() throws Exception {
@@ -34,20 +36,21 @@ public class HttpInboundServer {
         try {
             ServerBootstrap b = new ServerBootstrap();
             b.option(ChannelOption.SO_BACKLOG, 128)
-                    .option(ChannelOption.TCP_NODELAY, true)
-                    .option(ChannelOption.SO_KEEPALIVE, true)
-                    .option(ChannelOption.SO_REUSEADDR, true)
-                    .option(ChannelOption.SO_RCVBUF, 32 * 1024)
-                    .option(ChannelOption.SO_SNDBUF, 32 * 1024)
-                    .option(EpollChannelOption.SO_REUSEPORT, true)
+                    .childOption(ChannelOption.TCP_NODELAY, true)
                     .childOption(ChannelOption.SO_KEEPALIVE, true)
-                    .option(ChannelOption.ALLOCATOR, PooledByteBufAllocator.DEFAULT);
+                    .childOption(ChannelOption.SO_REUSEADDR, true)
+                    .childOption(ChannelOption.SO_RCVBUF, 32 * 1024)
+                    .childOption(ChannelOption.SO_SNDBUF, 32 * 1024)
+                    .childOption(EpollChannelOption.SO_REUSEPORT, true)
+                    .childOption(ChannelOption.SO_KEEPALIVE, true)
+                    .childOption(ChannelOption.ALLOCATOR, PooledByteBufAllocator.DEFAULT);
 
             b.group(bossGroup, workerGroup).channel(NioServerSocketChannel.class)
-                    .handler(new LoggingHandler(LogLevel.INFO)).childHandler(new HttpInboundInitializer(this.proxyServer));
+                    .handler(new LoggingHandler(LogLevel.DEBUG))
+                    .childHandler(new HttpInboundInitializer(this.proxyServers));
 
             Channel ch = b.bind(port).sync().channel();
-            logger.info("开启netty http服务器，监听地址和端口为 http://127.0.0.1:" + port + '/');
+            System.out.println("开启netty http服务器，监听地址和端口为 http://127.0.0.1:" + port + '/');
             ch.closeFuture().sync();
         } finally {
             bossGroup.shutdownGracefully();
